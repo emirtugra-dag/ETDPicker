@@ -1,7 +1,14 @@
 fn main() {
     if std::env::var("TARGET").unwrap_or_default().contains("windows") {
         let mut res = winres::WindowsResource::new();
-        res.set_icon("../../assets/app_icon.ico");
+
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let icon_path = std::path::Path::new(&manifest_dir)
+            .join("../../assets/app_icon.ico")
+            .canonicalize()
+            .unwrap();
+
+        res.set_icon(&icon_path.to_string_lossy());
         res.set("ProductName", "ETDPicker");
         res.set("FileDescription", "ETDPicker Screen Color Picker");
         res.set("LegalCopyright", "Copyright (c) 2026 Emir Tuğra Dağ");
