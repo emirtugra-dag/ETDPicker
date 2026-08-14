@@ -6,6 +6,16 @@ fn main() {
         res.set("FileDescription", "ETDPicker Installer Wizard");
         res.set("LegalCopyright", "Copyright (c) 2026 Emir Tuğra Dağ");
         res.set("CompanyName", "Emir Tuğra Dağ");
-        let _ = res.compile();
+
+        let windres_candidate = "C:\\Users\\vboxuser\\Desktop\\mingw64\\bin\\windres.exe";
+        let ar_candidate = "C:\\Users\\vboxuser\\Desktop\\mingw64\\bin\\ar.exe";
+        if std::path::Path::new(windres_candidate).exists() {
+            res.set_windres_path(windres_candidate);
+        }
+        if std::path::Path::new(ar_candidate).exists() {
+            res.set_ar_path(ar_candidate);
+        }
+
+        res.compile().expect("Failed to compile Windows resources");
     }
 }

@@ -1,6 +1,7 @@
-# Build release binaries
-Write-Host "Building release binaries..."
-& "C:\Users\vboxuser\.cargo\bin\cargo.exe" build --release
+# Build release binaries with resource compiler (icon & metadata)
+Write-Host "Building release binaries with embedded icons..."
+$env:PATH = "C:\Users\vboxuser\Desktop\mingw64\bin;" + $env:PATH
+& "C:\Users\vboxuser\.cargo\bin\cargo.exe" build --release --package etd-picker
 & "C:\Users\vboxuser\.cargo\bin\cargo.exe" build --release --package etd-installer
 
 # Prepare dist directory
@@ -28,7 +29,6 @@ if (-not $cert) {
         -NotAfter (Get-Date).AddYears(10) `
         -FriendlyName "Emir Tuğra Dağ Code Signing Certificate"
     
-    # Also trust in Root / TrustedPublisher for CurrentUser
     $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "CurrentUser")
     $rootStore.Open("ReadWrite")
     $rootStore.Add($cert)
