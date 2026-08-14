@@ -12,19 +12,20 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, FillRect,
+    CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect,
     SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE,
     DT_WORDBREAK, FW_BOLD, FW_NORMAL, TRANSPARENT,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetSystemMetrics, GetWindowTextW, LoadCursorW, LoadIconW, PostQuitMessage,
-    RegisterClassW, SendMessageW, SetWindowTextW, ShowWindow, TranslateMessage,
-    BM_GETCHECK, BM_SETCHECK, CS_HREDRAW, CS_VREDRAW, IDC_ARROW, MSG, SM_CXSCREEN,
-    SM_CYSCREEN, SW_HIDE, SW_SHOW, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_PAINT,
-    WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
-    WS_TABSTOP, WS_VISIBLE,
+    GetSystemMetrics, GetWindowTextW, IsDialogMessageW, LoadCursorW, LoadIconW,
+    PostQuitMessage, RegisterClassW, SendMessageW, SetWindowTextW, ShowWindow,
+    TranslateMessage, BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL,
+    CB_SETCURSEL, CS_HREDRAW, CS_VREDRAW, IDC_ARROW, MSG, SM_CXSCREEN, SM_CYSCREEN,
+    SW_HIDE, SW_SHOW, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_PAINT, WNDCLASSW,
+    WS_CHILD, WS_CLIPCHILDREN, WS_EX_DLGMODALFRAME, WS_EX_TOPMOST, WS_MINIMIZEBOX,
+    WS_OVERLAPPED, WS_POPUP, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
 };
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -54,6 +55,10 @@ static mut BTN_BACK: HWND = 0 as _;
 static mut BTN_NEXT: HWND = 0 as _;
 static mut BTN_CANCEL: HWND = 0 as _;
 
+// Language prompt controls
+static mut LANG_COMBO: HWND = 0 as _;
+static mut LANG_SELECTED: Option<Language> = None;
+
 fn get_active_lang() -> Language {
     if CURRENT_LANG.load(Ordering::SeqCst) == 0 {
         Language::Turkish
@@ -63,7 +68,6 @@ fn get_active_lang() -> Language {
 }
 
 fn get_default_install_dir() -> PathBuf {
-    // Check if existing install location exists in Registry
     let uninst_key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETDPicker\0"
         .encode_utf16()
         .collect();
@@ -111,6 +115,203 @@ fn get_default_install_dir() -> PathBuf {
     }
 }
 
+unsafe fn prompt_setup_language() -> Option<Language> {
+    LANG_SELECTED = None;
+
+    let class_name: Vec<u16> = "ETDInstallerLanguagePrompt\0".encode_utf16().collect();
+    let hinstance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
+
+    let icon = LoadIconW(hinstance, 1 as _);
+    let cursor = LoadCursorW(0 as _, IDC_ARROW);
+
+    let wc = WNDCLASSW {
+        style: CS_HREDRAW | CS_VREDRAW,
+        lpfnWndProc: Some(lang_prompt_wnd_proc),
+        cbClsExtra: 0,
+        cbWndExtra: 0,
+        hInstance: hinstance,
+        hIcon: icon,
+        hCursor: cursor,
+        hbrBackground: CreateSolidBrush(0x001A1A1A) as _,
+        lpszMenuName: std::ptr::null(),
+        lpszClassName: class_name.as_ptr(),
+    };
+    RegisterClassW(&wc);
+
+    let width = 390;
+    let height = 210;
+    let screen_w = GetSystemMetrics(SM_CXSCREEN);
+    let screen_h = GetSystemMetrics(SM_CYSCREEN);
+    let x = (screen_w - width) / 2;
+    let y = (screen_h - height) / 2;
+
+    let title_wide: Vec<u16> = "ETDPicker Setup - Language / Dil\0".encode_utf16().collect();
+
+    let hwnd = CreateWindowExW(
+        WS_EX_TOPMOST | WS_EX_DLGMODALFRAME,
+        class_name.as_ptr(),
+        title_wide.as_ptr(),
+        WS_POPUP | WS_VISIBLE,
+        x,
+        y,
+        width,
+        height,
+        0 as _,
+        0 as _,
+        hinstance,
+        std::ptr::null_mut(),
+    );
+
+    let font_ui = CreateFontW(
+        15, 0, 0, 0, FW_NORMAL as _, 0, 0, 0, 1, 0, 0, 0, 0,
+        "Segoe UI\0".encode_utf16().collect::<Vec<_>>().as_ptr(),
+    );
+
+    let combo_class: Vec<u16> = "COMBOBOX\0".encode_utf16().collect();
+    let btn_class: Vec<u16> = "BUTTON\0".encode_utf16().collect();
+
+    LANG_COMBO = CreateWindowExW(
+        0,
+        combo_class.as_ptr(),
+        std::ptr::null(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x0002 | 0x0200,
+        30,
+        78,
+        320,
+        150,
+        hwnd,
+        1001 as _,
+        hinstance,
+        std::ptr::null_mut(),
+    );
+    SendMessageW(LANG_COMBO, 0x0030, font_ui as _, 1);
+
+    let tr_str: Vec<u16> = "Türkçe (Turkish)\0".encode_utf16().collect();
+    let en_str: Vec<u16> = "English (İngilizce)\0".encode_utf16().collect();
+    SendMessageW(LANG_COMBO, CB_ADDSTRING, 0, tr_str.as_ptr() as _);
+    SendMessageW(LANG_COMBO, CB_ADDSTRING, 0, en_str.as_ptr() as _);
+    SendMessageW(LANG_COMBO, CB_SETCURSEL, 0, 0);
+
+    let ok_text: Vec<u16> = "Tamam / OK\0".encode_utf16().collect();
+    CreateWindowExW(
+        0,
+        btn_class.as_ptr(),
+        ok_text.as_ptr(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000001,
+        135,
+        138,
+        105,
+        34,
+        hwnd,
+        1002 as _,
+        hinstance,
+        std::ptr::null_mut(),
+    );
+
+    let cancel_text: Vec<u16> = "İptal / Cancel\0".encode_utf16().collect();
+    CreateWindowExW(
+        0,
+        btn_class.as_ptr(),
+        cancel_text.as_ptr(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        250,
+        138,
+        100,
+        34,
+        hwnd,
+        1003 as _,
+        hinstance,
+        std::ptr::null_mut(),
+    );
+
+    ShowWindow(hwnd, SW_SHOW);
+
+    let mut msg: MSG = std::mem::zeroed();
+    while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
+        if IsDialogMessageW(hwnd, &msg) == 0 {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        if windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(hwnd) == 0 {
+            break;
+        }
+    }
+
+    DeleteObject(font_ui as _);
+    LANG_SELECTED
+}
+
+unsafe extern "system" fn lang_prompt_wnd_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_COMMAND => {
+            let id = (wparam & 0xFFFF) as i32;
+            if id == 1002 {
+                let sel = SendMessageW(LANG_COMBO, CB_GETCURSEL, 0, 0);
+                LANG_SELECTED = Some(if sel == 0 { Language::Turkish } else { Language::English });
+                DestroyWindow(hwnd);
+            } else if id == 1003 || id == 2 {
+                LANG_SELECTED = None;
+                DestroyWindow(hwnd);
+            }
+            0
+        }
+        WM_PAINT => {
+            let mut ps = std::mem::zeroed();
+            let hdc = windows_sys::Win32::Graphics::Gdi::BeginPaint(hwnd, &mut ps);
+
+            let bg_brush = CreateSolidBrush(0x001B1A1A);
+            let full_rc = RECT { left: 0, top: 0, right: 390, bottom: 210 };
+            FillRect(hdc, &full_rc, bg_brush as _);
+            DeleteObject(bg_brush as _);
+
+            let border_brush = CreateSolidBrush(0x004A4A4A);
+            FrameRect(hdc, &full_rc, border_brush as _);
+            DeleteObject(border_brush as _);
+
+            SetBkMode(hdc, TRANSPARENT as _);
+
+            let font_title = CreateFontW(
+                17, 0, 0, 0, FW_BOLD as _, 0, 0, 0, 1, 0, 0, 0, 0,
+                "Segoe UI\0".encode_utf16().collect::<Vec<_>>().as_ptr(),
+            );
+            SelectObject(hdc, font_title as _);
+            SetTextColor(hdc, 0x00FFFFFF);
+
+            let mut t_wide: Vec<u16> = "Kurulum Dilini Seçin / Select Language".encode_utf16().collect();
+            let mut t_rc = RECT { left: 30, top: 18, right: 360, bottom: 44 };
+            DrawTextW(hdc, t_wide.as_mut_ptr(), t_wide.len() as _, &mut t_rc, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+
+            DeleteObject(font_title as _);
+
+            let font_label = CreateFontW(
+                13, 0, 0, 0, FW_NORMAL as _, 0, 0, 0, 1, 0, 0, 0, 0,
+                "Segoe UI\0".encode_utf16().collect::<Vec<_>>().as_ptr(),
+            );
+            SelectObject(hdc, font_label as _);
+            SetTextColor(hdc, 0x00CCCCCC);
+
+            let mut p_wide: Vec<u16> = "Lütfen kurulum dilini seçin / Please choose language:".encode_utf16().collect();
+            let mut p_rc = RECT { left: 30, top: 48, right: 360, bottom: 70 };
+            DrawTextW(hdc, p_wide.as_mut_ptr(), p_wide.len() as _, &mut p_rc, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+
+            DeleteObject(font_label as _);
+
+            windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
+            0
+        }
+        WM_DESTROY => {
+            PostQuitMessage(0);
+            0
+        }
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}
+
 fn main() {
     let exe_name = std::env::current_exe()
         .ok()
@@ -122,6 +323,14 @@ fn main() {
 
     if is_uninst_arg || is_uninst_name {
         IS_UNINSTALLER.store(true, Ordering::SeqCst);
+    } else {
+        // Prompt for language at the very beginning of the installation wizard!
+        let chosen_lang = unsafe { prompt_setup_language() };
+        match chosen_lang {
+            Some(Language::Turkish) => CURRENT_LANG.store(0, Ordering::SeqCst),
+            Some(Language::English) => CURRENT_LANG.store(1, Ordering::SeqCst),
+            None => return, // User cancelled language selection dialog
+        }
     }
 
     unsafe {
@@ -429,7 +638,6 @@ unsafe fn update_control_visibility() {
 }
 
 unsafe fn perform_installation(_hwnd: HWND) {
-    // 1. Terminate any running instance of ETDPicker silently before overwriting files (Update mode support)
     let _ = Command::new("taskkill")
         .args(["/F", "/IM", "ETDPicker.exe"])
         .creation_flags(CREATE_NO_WINDOW)
@@ -450,10 +658,8 @@ unsafe fn perform_installation(_hwnd: HWND) {
     let target_readme = install_dir.join("README.md");
     let target_guide = install_dir.join("PAINT_GUIDE.md");
 
-    // Write full embedded ETDPicker.exe
     let _ = fs::write(&target_exe, ASSET_PICKER_EXE);
 
-    // Copy setup as uninstaller
     if let Ok(curr_exe) = std::env::current_exe() {
         let _ = fs::copy(&curr_exe, &target_uninst);
     }
@@ -463,6 +669,16 @@ unsafe fn perform_installation(_hwnd: HWND) {
     let _ = fs::write(&target_disclaimer, ASSET_DISCLAIMER);
     let _ = fs::write(&target_readme, ASSET_README);
     let _ = fs::write(&target_guide, ASSET_PAINT_GUIDE);
+
+    let config_ini = install_dir.join("config.ini");
+    if !config_ini.exists() {
+        let lang = get_active_lang();
+        let cfg_content = format!(
+            "[Settings]\nlanguage={}\nhotkey_mod=1\nhotkey_vk=80\nhotkey_name=Alt + P\nrun_on_startup=false\nshow_tray_icon=true\nrecent_colors=#3498db,#2ecc71,#e74c3c,#f1c40f,#9b59b6\n",
+            lang.to_code()
+        );
+        let _ = fs::write(config_ini, cfg_content);
+    }
 
     registry::register_uninstaller(&install_dir);
 

@@ -4,6 +4,15 @@ pub enum Language {
     English,
 }
 
+impl Language {
+    pub fn to_code(&self) -> &'static str {
+        match self {
+            Language::Turkish => "tr",
+            Language::English => "en",
+        }
+    }
+}
+
 pub struct InstallerStrings {
     pub wizard_title: &'static str,
     pub step1_title: &'static str,
