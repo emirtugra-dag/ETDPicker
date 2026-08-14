@@ -36,7 +36,7 @@
     <tr>
       <td><img src="assets/screenshots/main_window.png" width="280" /></td>
       <td><img src="assets/screenshots/color_details.png" width="280" /></td>
-      <td><img src="assets/screenshots/settings_window.png" width="240" /></td>
+      <td><img src="assets/screenshots/settings_window.png" width="280" /></td>
     </tr>
   </table>
 </div>
