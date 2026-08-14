@@ -6,6 +6,7 @@ mod shortcut;
 
 use i18n::{get_installer_strings, Language};
 use std::fs;
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -25,6 +26,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
     WS_TABSTOP, WS_VISIBLE,
 };
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // Embedded full assets
 const ASSET_PICKER_EXE: &[u8] = include_bytes!("../../../dist/ETDPicker.exe");
@@ -60,6 +63,45 @@ fn get_active_lang() -> Language {
 }
 
 fn get_default_install_dir() -> PathBuf {
+    // Check if existing install location exists in Registry
+    let uninst_key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETDPicker\0"
+        .encode_utf16()
+        .collect();
+    let val_name: Vec<u16> = "InstallLocation\0".encode_utf16().collect();
+
+    unsafe {
+        let mut hkey = std::ptr::null_mut();
+        if windows_sys::Win32::System::Registry::RegOpenKeyExW(
+            windows_sys::Win32::System::Registry::HKEY_CURRENT_USER,
+            uninst_key.as_ptr(),
+            0,
+            windows_sys::Win32::System::Registry::KEY_READ,
+            &mut hkey,
+        ) == 0
+        {
+            let mut buf = [0u16; 512];
+            let mut size = (buf.len() * 2) as u32;
+            let mut type_val = 0;
+            if windows_sys::Win32::System::Registry::RegQueryValueExW(
+                hkey,
+                val_name.as_ptr(),
+                std::ptr::null_mut(),
+                &mut type_val,
+                buf.as_mut_ptr() as *mut _,
+                &mut size,
+            ) == 0
+            {
+                let len = (size / 2) as usize;
+                let path_str = String::from_utf16_lossy(&buf[..len.saturating_sub(1)]);
+                if !path_str.trim().is_empty() {
+                    windows_sys::Win32::System::Registry::RegCloseKey(hkey);
+                    return PathBuf::from(path_str.trim());
+                }
+            }
+            windows_sys::Win32::System::Registry::RegCloseKey(hkey);
+        }
+    }
+
     if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
         PathBuf::from(appdata).join("Programs").join("ETDPicker")
     } else if let Ok(prog) = std::env::var("ProgramFiles") {
@@ -387,6 +429,12 @@ unsafe fn update_control_visibility() {
 }
 
 unsafe fn perform_installation(_hwnd: HWND) {
+    // 1. Terminate any running instance of ETDPicker silently before overwriting files (Update mode support)
+    let _ = Command::new("taskkill")
+        .args(["/F", "/IM", "ETDPicker.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
     let mut dir_buf = [0u16; 512];
     let len = GetWindowTextW(EDT_DIR, dir_buf.as_mut_ptr(), 512);
     let install_dir_str = String::from_utf16_lossy(&dir_buf[..len as usize]);
@@ -478,6 +526,7 @@ unsafe fn perform_uninstallation() {
 
     let _ = Command::new("taskkill")
         .args(["/F", "/IM", "ETDPicker.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     if let Ok(curr_exe) = std::env::current_exe() {
@@ -486,6 +535,7 @@ unsafe fn perform_uninstallation() {
             let cmd = format!("timeout /t 1 /nobreak > NUL & rmdir /s /q \"{}\"", parent_str);
             let _ = Command::new("cmd")
                 .args(["/C", &cmd])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn();
         }
     }
@@ -550,7 +600,9 @@ unsafe extern "system" fn wizard_wnd_proc(
                         let len = GetWindowTextW(EDT_DIR, dir_buf.as_mut_ptr(), 512);
                         let install_dir_str = String::from_utf16_lossy(&dir_buf[..len as usize]);
                         let target_exe = PathBuf::from(install_dir_str).join("ETDPicker.exe");
-                        let _ = Command::new(&target_exe).spawn();
+                        let _ = Command::new(&target_exe)
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .spawn();
                     }
                     DestroyWindow(hwnd);
                     return 0;

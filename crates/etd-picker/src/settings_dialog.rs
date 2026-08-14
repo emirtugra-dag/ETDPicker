@@ -17,14 +17,23 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 static mut CHK_STARTUP: HWND = 0 as _;
+static mut CHK_TRAY: HWND = 0 as _;
 static mut CMB_LANG: HWND = 0 as _;
 static mut CMB_MOD: HWND = 0 as _;
 static mut CMB_KEY: HWND = 0 as _;
 static mut SETTINGS_SAVED: bool = false;
+static mut REQUEST_EXIT: bool = false;
 
-pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
+pub enum SettingsResult {
+    Saved,
+    Cancelled,
+    ExitApplication,
+}
+
+pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsResult {
     unsafe {
         SETTINGS_SAVED = false;
+        REQUEST_EXIT = false;
         let strings = get_strings(cfg.language);
 
         let class_name: Vec<u16> = "ETDSettingsWindow\0".encode_utf16().collect();
@@ -44,8 +53,8 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
         };
         RegisterClassW(&wc);
 
-        let width = 440;
-        let height = 340;
+        let width = 460;
+        let height = 390;
         let screen_w = GetSystemMetrics(SM_CXSCREEN);
         let screen_h = GetSystemMetrics(SM_CYSCREEN);
         let x = (screen_w - width) / 2;
@@ -86,9 +95,9 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
             combo_class.as_ptr(),
             std::ptr::null(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x0002 | 0x0200,
-            180,
+            190,
             68,
-            220,
+            230,
             150,
             hwnd,
             2001 as _,
@@ -108,9 +117,9 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
             combo_class.as_ptr(),
             std::ptr::null(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x0002 | 0x0200,
-            180,
+            190,
             116,
-            100,
+            110,
             150,
             hwnd,
             2002 as _,
@@ -138,7 +147,7 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
             combo_class.as_ptr(),
             std::ptr::null(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x0002 | 0x0200,
-            290,
+            310,
             116,
             110,
             200,
@@ -179,8 +188,8 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
             chk_label.as_ptr(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000003,
             24,
-            168,
-            380,
+            164,
+            400,
             26,
             hwnd,
             2004 as _,
@@ -190,36 +199,72 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
         SendMessageW(CHK_STARTUP, 0x0030, font_ui as _, 1);
         SendMessageW(CHK_STARTUP, BM_SETCHECK, if cfg.run_on_startup { 1 } else { 0 }, 0);
 
-        // 5. Save Button
+        // 5. System Tray Checkbox
+        let tray_label: Vec<u16> = strings.tray_label.encode_utf16().chain(std::iter::once(0)).collect();
+        CHK_TRAY = CreateWindowExW(
+            0,
+            btn_class.as_ptr(),
+            tray_label.as_ptr(),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000003,
+            24,
+            198,
+            400,
+            26,
+            hwnd,
+            2005 as _,
+            hinstance,
+            std::ptr::null_mut(),
+        );
+        SendMessageW(CHK_TRAY, 0x0030, font_ui as _, 1);
+        SendMessageW(CHK_TRAY, BM_SETCHECK, if cfg.show_tray_icon { 1 } else { 0 }, 0);
+
+        // 6. Exit Application Button
+        let exit_app_text: Vec<u16> = strings.exit_app_btn.encode_utf16().chain(std::iter::once(0)).collect();
+        CreateWindowExW(
+            0,
+            btn_class.as_ptr(),
+            exit_app_text.as_ptr(),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            24,
+            248,
+            210,
+            34,
+            hwnd,
+            2007 as _,
+            hinstance,
+            std::ptr::null_mut(),
+        );
+
+        // 7. Save Button
         let save_text: Vec<u16> = strings.save_btn.encode_utf16().chain(std::iter::once(0)).collect();
         CreateWindowExW(
             0,
             btn_class.as_ptr(),
             save_text.as_ptr(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000001,
-            190,
-            230,
-            100,
+            210,
+            310,
+            105,
             36,
             hwnd,
-            2005 as _,
+            2008 as _,
             hinstance,
             std::ptr::null_mut(),
         );
 
-        // 6. Cancel Button
+        // 8. Cancel Button
         let cancel_text: Vec<u16> = strings.cancel_btn.encode_utf16().chain(std::iter::once(0)).collect();
         CreateWindowExW(
             0,
             btn_class.as_ptr(),
             cancel_text.as_ptr(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            300,
-            230,
-            100,
+            325,
+            310,
+            105,
             36,
             hwnd,
-            2006 as _,
+            2009 as _,
             hinstance,
             std::ptr::null_mut(),
         );
@@ -243,6 +288,10 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
         }
 
         DeleteObject(font_ui as _);
+
+        if REQUEST_EXIT {
+            return SettingsResult::ExitApplication;
+        }
 
         if SETTINGS_SAVED {
             let lang_idx = SendMessageW(CMB_LANG, CB_GETCURSEL, 0, 0);
@@ -279,12 +328,15 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> bool {
             let startup_checked = SendMessageW(CHK_STARTUP, BM_GETCHECK, 0, 0);
             cfg.run_on_startup = startup_checked == 1;
 
+            let tray_checked = SendMessageW(CHK_TRAY, BM_GETCHECK, 0, 0);
+            cfg.show_tray_icon = tray_checked == 1;
+
             cfg.apply_startup_registry();
             cfg.save();
-            return true;
+            return SettingsResult::Saved;
         }
 
-        false
+        SettingsResult::Cancelled
     }
 }
 
@@ -297,10 +349,14 @@ unsafe extern "system" fn settings_wnd_proc(
     match msg {
         WM_COMMAND => {
             let id = (wparam & 0xFFFF) as i32;
-            if id == 2005 {
+            if id == 2008 {
                 SETTINGS_SAVED = true;
                 DestroyWindow(hwnd);
-            } else if id == 2006 || id == 2 {
+            } else if id == 2007 {
+                // Exit app
+                REQUEST_EXIT = true;
+                DestroyWindow(hwnd);
+            } else if id == 2009 || id == 2 {
                 SETTINGS_SAVED = false;
                 DestroyWindow(hwnd);
             }
@@ -314,7 +370,7 @@ unsafe extern "system" fn settings_wnd_proc(
             let strings = get_strings(cfg.language);
 
             let bg_brush = CreateSolidBrush(0x001F1E1E);
-            let full_rc = RECT { left: 0, top: 0, right: 440, bottom: 340 };
+            let full_rc = RECT { left: 0, top: 0, right: 460, bottom: 390 };
             FillRect(hdc, &full_rc, bg_brush as _);
             DeleteObject(bg_brush as _);
 
@@ -332,7 +388,7 @@ unsafe extern "system" fn settings_wnd_proc(
             SetTextColor(hdc, 0x00FFFFFF);
 
             let mut title_wide: Vec<u16> = strings.settings_title.encode_utf16().collect();
-            let mut title_rc = RECT { left: 24, top: 18, right: 416, bottom: 48 };
+            let mut title_rc = RECT { left: 24, top: 18, right: 436, bottom: 48 };
             DrawTextW(hdc, title_wide.as_mut_ptr(), title_wide.len() as _, &mut title_rc, DT_LEFT | DT_NOPREFIX);
 
             DeleteObject(font_title as _);
@@ -345,17 +401,17 @@ unsafe extern "system" fn settings_wnd_proc(
             SetTextColor(hdc, 0x00CCCCCC);
 
             let mut l1_wide: Vec<u16> = strings.lang_label.encode_utf16().collect();
-            let mut l1_rc = RECT { left: 24, top: 72, right: 170, bottom: 96 };
+            let mut l1_rc = RECT { left: 24, top: 72, right: 180, bottom: 96 };
             DrawTextW(hdc, l1_wide.as_mut_ptr(), l1_wide.len() as _, &mut l1_rc, DT_LEFT | DT_NOPREFIX);
 
             let mut l2_wide: Vec<u16> = strings.hotkey_label.encode_utf16().collect();
-            let mut l2_rc = RECT { left: 24, top: 120, right: 170, bottom: 144 };
+            let mut l2_rc = RECT { left: 24, top: 120, right: 180, bottom: 144 };
             DrawTextW(hdc, l2_wide.as_mut_ptr(), l2_wide.len() as _, &mut l2_rc, DT_LEFT | DT_NOPREFIX);
 
             SelectObject(hdc, old_font);
             DeleteObject(font_label as _);
 
-            windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &mut ps);
+            windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
             0
         }
         WM_DESTROY => {

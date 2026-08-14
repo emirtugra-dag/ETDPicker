@@ -42,9 +42,11 @@ pub struct Strings {
     pub settings_title: &'static str,
     pub lang_label: &'static str,
     pub startup_label: &'static str,
+    pub tray_label: &'static str,
     pub hotkey_label: &'static str,
     pub save_btn: &'static str,
     pub cancel_btn: &'static str,
+    pub exit_app_btn: &'static str,
 
     // Tray Menu
     pub tray_pick: &'static str,
@@ -74,9 +76,11 @@ pub const TR_STRINGS: Strings = Strings {
     settings_title: "ETDPicker - Ayarlar",
     lang_label: "Uygulama Dili:",
     startup_label: "Windows açıldığında otomatik başlat",
+    tray_label: "Sistem tepsisinde simgeyi göster",
     hotkey_label: "Renk Seçme Kısayol Tuşu:",
     save_btn: "Kaydet",
     cancel_btn: "İptal",
+    exit_app_btn: "Uygulamayı Tamamen Kapat",
 
     tray_pick: "🎯 Renk Seç",
     tray_show: "Pencereyi Göster",
@@ -105,9 +109,11 @@ pub const EN_STRINGS: Strings = Strings {
     settings_title: "ETDPicker - Settings",
     lang_label: "Application Language:",
     startup_label: "Launch automatically on Windows startup",
+    tray_label: "Show icon in system tray",
     hotkey_label: "Color Picker Hotkey:",
     save_btn: "Save",
     cancel_btn: "Cancel",
+    exit_app_btn: "Exit Application Completely",
 
     tray_pick: "🎯 Pick Color",
     tray_show: "Show Window",

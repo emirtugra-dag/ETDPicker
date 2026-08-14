@@ -14,6 +14,7 @@ pub struct AppConfig {
     pub hotkey_vk: u32,
     pub hotkey_name: String,
     pub run_on_startup: bool,
+    pub show_tray_icon: bool,
     pub recent_colors: Vec<RgbColor>,
 }
 
@@ -25,6 +26,7 @@ impl Default for AppConfig {
             hotkey_vk: 0x50,    // 'P' key
             hotkey_name: "Alt + P".to_string(),
             run_on_startup: false,
+            show_tray_icon: true,
             recent_colors: vec![
                 RgbColor::new(52, 152, 219),  // Blue
                 RgbColor::new(46, 204, 113),  // Green
@@ -94,6 +96,7 @@ impl AppConfig {
                             }
                         }
                         "run_on_startup" => cfg.run_on_startup = v == "true" || v == "1",
+                        "show_tray_icon" => cfg.show_tray_icon = v == "true" || v == "1",
                         "recent_colors" => {
                             let mut list = Vec::new();
                             for hex in v.split(',') {
@@ -124,12 +127,13 @@ impl AppConfig {
             .join(",");
 
         let content = format!(
-            "[Settings]\nlanguage={}\nhotkey_mod={}\nhotkey_vk={}\nhotkey_name={}\nrun_on_startup={}\nrecent_colors={}\n",
+            "[Settings]\nlanguage={}\nhotkey_mod={}\nhotkey_vk={}\nhotkey_name={}\nrun_on_startup={}\nshow_tray_icon={}\nrecent_colors={}\n",
             self.language.to_code(),
             self.hotkey_mod,
             self.hotkey_vk,
             self.hotkey_name,
             if self.run_on_startup { "true" } else { "false" },
+            if self.show_tray_icon { "true" } else { "false" },
             colors_str
         );
 

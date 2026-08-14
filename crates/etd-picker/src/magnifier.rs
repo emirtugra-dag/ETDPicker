@@ -9,28 +9,81 @@ use windows_sys::Win32::Graphics::Gdi::{
     FW_BOLD, FW_NORMAL, PS_SOLID, SRCCOPY, TRANSPARENT,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_LBUTTON, VK_RBUTTON, VK_RIGHT, VK_SPACE,
-    VK_UP,
+    GetAsyncKeyState, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_LBUTTON, VK_RBUTTON, VK_RETURN, VK_RIGHT,
+    VK_SPACE, VK_UP,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos,
-    GetSystemMetrics, PeekMessageW, PostQuitMessage, RegisterClassW, SetCursorPos, SetWindowPos,
-    ShowWindow, CS_HREDRAW, CS_VREDRAW, MSG, PM_REMOVE, SM_CXSCREEN, SM_CYSCREEN,
-    SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOW, WM_DESTROY, WNDCLASSW, WS_EX_NOACTIVATE,
+    CallNextHookEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos,
+    GetSystemMetrics, PeekMessageW, PostQuitMessage, RegisterClassW, SetCursorPos, SetWindowsHookExW,
+    SetWindowPos, ShowWindow, UnhookWindowsHookEx, CS_HREDRAW, CS_VREDRAW, HHOOK, KBDLLHOOKSTRUCT, MSG,
+    PM_REMOVE, SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOW,
+    WH_KEYBOARD_LL, WM_DESTROY, WM_KEYDOWN, WM_SYSKEYDOWN, WNDCLASSW, WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 static MAGNIFIER_ACTIVE: AtomicBool = AtomicBool::new(false);
+static HOOK_DONE: AtomicBool = AtomicBool::new(false);
+static HOOK_PICKED: AtomicBool = AtomicBool::new(false);
 
-const GRID_SIZE: i32 = 13; // 13x13 pixels around cursor
-const PIXEL_ZOOM: i32 = 12; // 12x zoom per pixel
-const GRID_PIXELS: i32 = GRID_SIZE * PIXEL_ZOOM; // 156 px
+const GRID_SIZE: i32 = 13;
+const PIXEL_ZOOM: i32 = 12;
+const GRID_PIXELS: i32 = GRID_SIZE * PIXEL_ZOOM;
 const WINDOW_WIDTH: i32 = 180;
 const WINDOW_HEIGHT: i32 = 250;
 
 pub struct MagnifierResult {
     pub selected: bool,
     pub color: RgbColor,
+}
+
+unsafe extern "system" fn low_level_keyboard_proc(
+    n_code: i32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    if n_code >= 0 && (wparam as u32 == WM_KEYDOWN || wparam as u32 == WM_SYSKEYDOWN) {
+        let kbd = *(lparam as *const KBDLLHOOKSTRUCT);
+        let vk = kbd.vkCode as u16;
+
+        match vk {
+            VK_LEFT => {
+                let mut pt = POINT { x: 0, y: 0 };
+                GetCursorPos(&mut pt);
+                SetCursorPos(pt.x - 1, pt.y);
+                return 1;
+            }
+            VK_RIGHT => {
+                let mut pt = POINT { x: 0, y: 0 };
+                GetCursorPos(&mut pt);
+                SetCursorPos(pt.x + 1, pt.y);
+                return 1;
+            }
+            VK_UP => {
+                let mut pt = POINT { x: 0, y: 0 };
+                GetCursorPos(&mut pt);
+                SetCursorPos(pt.x, pt.y - 1);
+                return 1;
+            }
+            VK_DOWN => {
+                let mut pt = POINT { x: 0, y: 0 };
+                GetCursorPos(&mut pt);
+                SetCursorPos(pt.x, pt.y + 1);
+                return 1;
+            }
+            VK_SPACE | VK_RETURN => {
+                HOOK_PICKED.store(true, Ordering::SeqCst);
+                HOOK_DONE.store(true, Ordering::SeqCst);
+                return 1;
+            }
+            VK_ESCAPE => {
+                HOOK_PICKED.store(false, Ordering::SeqCst);
+                HOOK_DONE.store(true, Ordering::SeqCst);
+                return 1;
+            }
+            _ => {}
+        }
+    }
+    CallNextHookEx(0 as _, n_code, wparam, lparam)
 }
 
 pub fn pick_color_interactive(lang: Language) -> MagnifierResult {
@@ -40,6 +93,9 @@ pub fn pick_color_interactive(lang: Language) -> MagnifierResult {
             color: RgbColor::new(0, 0, 0),
         };
     }
+
+    HOOK_DONE.store(false, Ordering::SeqCst);
+    HOOK_PICKED.store(false, Ordering::SeqCst);
 
     let is_picked;
     let mut picked_color = RgbColor::new(0, 0, 0);
@@ -80,6 +136,14 @@ pub fn pick_color_interactive(lang: Language) -> MagnifierResult {
         ShowWindow(hwnd, SW_SHOW);
         UpdateWindow(hwnd);
 
+        // Install Low-Level Keyboard Hook to intercept arrow keys and space/esc
+        let hook: HHOOK = SetWindowsHookExW(
+            WH_KEYBOARD_LL,
+            Some(low_level_keyboard_proc),
+            hinstance,
+            0,
+        );
+
         let mut msg: MSG = std::mem::zeroed();
         let hdc_screen = GetDC(0 as _);
         let hdc_mem = CreateCompatibleDC(hdc_screen);
@@ -106,40 +170,20 @@ pub fn pick_color_interactive(lang: Language) -> MagnifierResult {
                 DispatchMessageW(&msg);
             }
 
-            if (GetAsyncKeyState(VK_LBUTTON as i32) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(VK_SPACE as i32) as u16 & 0x8000) != 0
-            {
+            if HOOK_DONE.load(Ordering::SeqCst) {
+                is_picked = HOOK_PICKED.load(Ordering::SeqCst);
+                break;
+            }
+
+            // Mouse click checks
+            if (GetAsyncKeyState(VK_LBUTTON as i32) as u16 & 0x8000) != 0 {
                 is_picked = true;
                 break;
             }
 
-            if (GetAsyncKeyState(VK_RBUTTON as i32) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(VK_ESCAPE as i32) as u16 & 0x8000) != 0
-            {
+            if (GetAsyncKeyState(VK_RBUTTON as i32) as u16 & 0x8000) != 0 {
                 is_picked = false;
                 break;
-            }
-
-            if (GetAsyncKeyState(VK_LEFT as i32) as u16 & 0x8000) != 0 {
-                let mut pt = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut pt);
-                SetCursorPos(pt.x - 1, pt.y);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            } else if (GetAsyncKeyState(VK_RIGHT as i32) as u16 & 0x8000) != 0 {
-                let mut pt = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut pt);
-                SetCursorPos(pt.x + 1, pt.y);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            } else if (GetAsyncKeyState(VK_UP as i32) as u16 & 0x8000) != 0 {
-                let mut pt = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut pt);
-                SetCursorPos(pt.x, pt.y - 1);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            } else if (GetAsyncKeyState(VK_DOWN as i32) as u16 & 0x8000) != 0 {
-                let mut pt = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut pt);
-                SetCursorPos(pt.x, pt.y + 1);
-                std::thread::sleep(std::time::Duration::from_millis(50));
             }
 
             let mut pt = POINT { x: 0, y: 0 };
@@ -351,6 +395,10 @@ pub fn pick_color_interactive(lang: Language) -> MagnifierResult {
             ReleaseDC(hwnd, hdc_win);
 
             std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+
+        if hook != 0 as _ {
+            UnhookWindowsHookEx(hook);
         }
 
         SelectObject(hdc_mem, old_bmp);

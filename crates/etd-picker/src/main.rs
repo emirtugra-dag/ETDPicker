@@ -10,6 +10,7 @@ mod settings_dialog;
 use color::RgbColor;
 use config::AppConfig;
 use i18n::{get_strings, Language};
+use settings_dialog::SettingsResult;
 use std::sync::Mutex;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
@@ -31,11 +32,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics, LoadCursorW,
     LoadIconW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetWindowTextW, ShowWindow,
     TrackPopupMenu, TranslateMessage, CS_HREDRAW, CS_VREDRAW, IDC_ARROW, MF_SEPARATOR,
-    MF_STRING, MSG, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE, SW_SHOW,
-    TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_COMMAND, WM_DESTROY,
-    WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_PAINT, WM_RBUTTONUP, WM_TIMER,
-    WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
-    WS_VISIBLE,
+    MF_STRING, MSG, SC_CLOSE, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE, SW_SHOW,
+    TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_CLOSE, WM_COMMAND, WM_DESTROY,
+    WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_PAINT, WM_RBUTTONUP, WM_SYSCOMMAND,
+    WM_TIMER, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED,
+    WS_SYSMENU, WS_VISIBLE,
 };
 
 const WM_TRAYICON: u32 = WM_USER + 1;
@@ -48,6 +49,7 @@ pub struct AppState {
     pub toast_visible: bool,
     pub toast_text: String,
     pub app_hwnd: isize,
+    pub tray_active: bool,
 }
 
 unsafe impl Send for AppState {}
@@ -60,12 +62,14 @@ static APP_STATE: Mutex<AppState> = Mutex::new(AppState {
         hotkey_vk: 0x50,
         hotkey_name: String::new(),
         run_on_startup: false,
+        show_tray_icon: true,
         recent_colors: Vec::new(),
     },
     active_color: RgbColor::new(52, 152, 219),
     toast_visible: false,
     toast_text: String::new(),
     app_hwnd: 0,
+    tray_active: false,
 });
 
 fn main() {
@@ -132,7 +136,12 @@ fn main() {
         }
 
         register_app_hotkey(hwnd, cfg.hotkey_mod, cfg.hotkey_vk);
-        add_tray_icon(hwnd, icon, title);
+
+        if cfg.show_tray_icon {
+            add_tray_icon(hwnd, icon, title);
+            let mut state = APP_STATE.lock().unwrap();
+            state.tray_active = true;
+        }
 
         let is_silent = std::env::args().any(|arg| arg == "--silent" || arg == "-s");
         if is_silent {
@@ -223,6 +232,9 @@ unsafe fn trigger_pick_color(hwnd: HWND) {
 
     ShowWindow(hwnd, SW_HIDE);
     let res = magnifier::pick_color_interactive(lang);
+
+    // After picking, ALWAYS restore and show the main window to show the selected color!
+    ShowWindow(hwnd, SW_RESTORE);
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
 
@@ -269,10 +281,25 @@ unsafe extern "system" fn main_wnd_proc(
             }
             0
         }
+        WM_SYSCOMMAND => {
+            let cmd = (wparam & 0xFFF0) as u32;
+            if cmd == SC_CLOSE {
+                // Hide to background instead of quitting!
+                ShowWindow(hwnd, SW_HIDE);
+                return 0;
+            }
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        WM_CLOSE => {
+            // Hide to background instead of quitting!
+            ShowWindow(hwnd, SW_HIDE);
+            0
+        }
         WM_TRAYICON => {
             let event = (lparam & 0xFFFF) as u32;
             if event == WM_LBUTTONUP {
                 ShowWindow(hwnd, SW_RESTORE);
+                ShowWindow(hwnd, SW_SHOW);
                 SetForegroundWindow(hwnd);
             } else if event == WM_RBUTTONUP {
                 let mut pt = POINT { x: 0, y: 0 };
@@ -311,6 +338,7 @@ unsafe extern "system" fn main_wnd_proc(
                 9001 => trigger_pick_color(hwnd),
                 9002 => {
                     ShowWindow(hwnd, SW_RESTORE);
+                    ShowWindow(hwnd, SW_SHOW);
                     SetForegroundWindow(hwnd);
                 }
                 9003 => {
@@ -325,16 +353,33 @@ unsafe extern "system" fn main_wnd_proc(
                         let state = APP_STATE.lock().unwrap();
                         state.config.clone()
                     };
-                    if settings_dialog::show_settings_dialog(hwnd, &mut cfg_copy) {
-                        register_app_hotkey(hwnd, cfg_copy.hotkey_mod, cfg_copy.hotkey_vk);
-                        let title = get_strings(cfg_copy.language).app_title;
-                        let title_wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-                        SetWindowTextW(hwnd, title_wide.as_ptr());
-                        {
-                            let mut state = APP_STATE.lock().unwrap();
-                            state.config = cfg_copy;
+                    match settings_dialog::show_settings_dialog(hwnd, &mut cfg_copy) {
+                        SettingsResult::Saved => {
+                            register_app_hotkey(hwnd, cfg_copy.hotkey_mod, cfg_copy.hotkey_vk);
+                            let title = get_strings(cfg_copy.language).app_title;
+                            let title_wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+                            SetWindowTextW(hwnd, title_wide.as_ptr());
+
+                            let hinstance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
+                            let icon = LoadIconW(hinstance, 1 as _);
+
+                            {
+                                let mut state = APP_STATE.lock().unwrap();
+                                if cfg_copy.show_tray_icon && !state.tray_active {
+                                    add_tray_icon(hwnd, icon, title);
+                                    state.tray_active = true;
+                                } else if !cfg_copy.show_tray_icon && state.tray_active {
+                                    remove_tray_icon(hwnd);
+                                    state.tray_active = false;
+                                }
+                                state.config = cfg_copy;
+                            }
+                            windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                         }
-                        windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
+                        SettingsResult::ExitApplication => {
+                            DestroyWindow(hwnd);
+                        }
+                        SettingsResult::Cancelled => {}
                     }
                 }
                 9005 => {
@@ -414,16 +459,33 @@ unsafe extern "system" fn main_wnd_proc(
                                 let state = APP_STATE.lock().unwrap();
                                 state.config.clone()
                             };
-                            if settings_dialog::show_settings_dialog(hwnd, &mut cfg_copy) {
-                                register_app_hotkey(hwnd, cfg_copy.hotkey_mod, cfg_copy.hotkey_vk);
-                                let title = get_strings(cfg_copy.language).app_title;
-                                let title_wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-                                SetWindowTextW(hwnd, title_wide.as_ptr());
-                                {
-                                    let mut state = APP_STATE.lock().unwrap();
-                                    state.config = cfg_copy;
+                            match settings_dialog::show_settings_dialog(hwnd, &mut cfg_copy) {
+                                SettingsResult::Saved => {
+                                    register_app_hotkey(hwnd, cfg_copy.hotkey_mod, cfg_copy.hotkey_vk);
+                                    let title = get_strings(cfg_copy.language).app_title;
+                                    let title_wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+                                    SetWindowTextW(hwnd, title_wide.as_ptr());
+
+                                    let hinstance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
+                                    let icon = LoadIconW(hinstance, 1 as _);
+
+                                    {
+                                        let mut state = APP_STATE.lock().unwrap();
+                                        if cfg_copy.show_tray_icon && !state.tray_active {
+                                            add_tray_icon(hwnd, icon, title);
+                                            state.tray_active = true;
+                                        } else if !cfg_copy.show_tray_icon && state.tray_active {
+                                            remove_tray_icon(hwnd);
+                                            state.tray_active = false;
+                                        }
+                                        state.config = cfg_copy;
+                                    }
+                                    windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                                 }
-                                windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
+                                SettingsResult::ExitApplication => {
+                                    DestroyWindow(hwnd);
+                                }
+                                SettingsResult::Cancelled => {}
                             }
                         }
                         201 => {

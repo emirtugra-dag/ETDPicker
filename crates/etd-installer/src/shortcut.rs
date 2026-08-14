@@ -1,5 +1,8 @@
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn create_shortcut(
     target_exe: &Path,
@@ -28,6 +31,7 @@ pub fn create_shortcut(
 
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     output.map(|o| o.status.success()).unwrap_or(false)
