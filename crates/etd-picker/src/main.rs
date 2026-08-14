@@ -1,10 +1,10 @@
 #![windows_subsystem = "windows"]
 
 mod color;
+mod color_guide;
 mod config;
 mod i18n;
 mod magnifier;
-mod paint_guide;
 mod settings_dialog;
 
 use color::RgbColor;
@@ -377,7 +377,7 @@ unsafe extern "system" fn main_wnd_proc(
 
                 let pick_str: Vec<u16> = strings.tray_pick.encode_utf16().chain(std::iter::once(0)).collect();
                 let show_str: Vec<u16> = strings.tray_show.encode_utf16().chain(std::iter::once(0)).collect();
-                let guide_str: Vec<u16> = strings.tray_paint_guide.encode_utf16().chain(std::iter::once(0)).collect();
+                let guide_str: Vec<u16> = strings.tray_color_guide.encode_utf16().chain(std::iter::once(0)).collect();
                 let set_str: Vec<u16> = strings.tray_settings.encode_utf16().chain(std::iter::once(0)).collect();
                 let exit_str: Vec<u16> = strings.tray_exit.encode_utf16().chain(std::iter::once(0)).collect();
 
@@ -407,7 +407,7 @@ unsafe extern "system" fn main_wnd_proc(
                         let state = APP_STATE.lock().unwrap();
                         state.config.language
                     };
-                    paint_guide::show_paint_guide(hwnd, lang);
+                    color_guide::show_color_guide(hwnd, lang);
                     ShowWindow(hwnd, SW_SHOW);
                     SetForegroundWindow(hwnd);
                     windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
@@ -519,7 +519,7 @@ unsafe extern "system" fn main_wnd_proc(
                                 let state = APP_STATE.lock().unwrap();
                                 state.config.language
                             };
-                            paint_guide::show_paint_guide(hwnd, lang);
+                            color_guide::show_color_guide(hwnd, lang);
                             ShowWindow(hwnd, SW_SHOW);
                             SetForegroundWindow(hwnd);
                             windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
@@ -687,7 +687,7 @@ unsafe extern "system" fn main_wnd_proc(
 
             SelectObject(hdc, font_label as _);
             SetTextColor(hdc, 0x00909090);
-            let mut rgb_lbl_wide: Vec<u16> = "RGB (Paint)".encode_utf16().collect();
+            let mut rgb_lbl_wide: Vec<u16> = "RGB".encode_utf16().collect();
             let mut rgb_lbl_rc = RECT { left: 210, top: 108, right: 330, bottom: 124 };
             DrawTextW(hdc, rgb_lbl_wide.as_mut_ptr(), rgb_lbl_wide.len() as _, &mut rgb_lbl_rc, DT_LEFT | DT_SINGLELINE);
 
@@ -744,7 +744,7 @@ unsafe extern "system" fn main_wnd_proc(
             DrawTextW(hdc, extra_wide.as_mut_ptr(), extra_wide.len() as _, &mut extra_rc, DT_LEFT | DT_SINGLELINE);
 
             SetTextColor(hdc, 0x00808080);
-            let mut hint_wide: Vec<u16> = strings.paint_hint.encode_utf16().collect();
+            let mut hint_wide: Vec<u16> = strings.guide_hint.encode_utf16().collect();
             let mut hint_rc = RECT { left: 210, top: 210, right: 480, bottom: 244 };
             DrawTextW(hdc, hint_wide.as_mut_ptr(), hint_wide.len() as _, &mut hint_rc, DT_LEFT | DT_NOPREFIX);
 

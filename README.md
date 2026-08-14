@@ -30,8 +30,8 @@
   <table>
     <tr>
       <td align="center"><b>🖥️ Ana Ekran (Main Window)</b></td>
-      <td align="center"><b>⚙️ Ayarlar (Settings))</b></td>
-      <td align="center"><b>🔍 Canlı Büyüteç (Pixel Magnifier</b></td>
+      <td align="center"><b>🔍 Canlı Büyüteç (Pixel Magnifier)</b></td>
+      <td align="center"><b>⚙️ Ayarlar (Settings)</b></td>
     </tr>
     <tr>
       <td><img src="assets/screenshots/main_window.png" width="280" /></td>
@@ -48,7 +48,7 @@
 <a name="-türkçe"></a>
 ## 🇹🇷 Türkçe
 
-**ETDPicker**, Windows işletim sistemleri için geliştirilmiş, ekranın herhangi bir noktasındaki rengi piksel hassasiyetiyle anında seçmenizi, HEX/RGB/HSL/CMYK formatlarında kopyalamanızı ve MS Paint, Adobe Photoshop, Figma veya web projelerinizde kolayca kullanmanızı sağlayan **ultra hafif ve yüksek performanslı** bir renk seçme aracıdır.
+**ETDPicker**, Windows işletim sistemleri için geliştirilmiş, ekranın herhangi bir noktasındaki rengi piksel hassasiyetiyle anında seçmenizi, HEX/RGB/HSL/CMYK formatlarında kopyalamanızı ve grafik tasarım, dijital çizim, fotoğraf düzenleme veya web projelerinizde kolayca kullanmanızı sağlayan **ultra hafif ve yüksek performanslı** bir renk seçme aracıdır.
 
 ### 🌟 Öne Çıkan Özellikler
 
@@ -59,7 +59,7 @@
 - 📋 **Otomatik Panoya Kopyalama**: Seçilen renk otomatik olarak HEX formatında (`#3498DB`) panonuza kopyalanır.
 - 🔔 **Sistem Tepsisi (System Tray) Entegrasyonu**: Kapatıldığında arka planda çalışmaya devam eder. Tepsi simgesine sol tıklayarak açabilir veya sağ tıklayarak hızlı menüye erişebilirsiniz.
 - 🎨 **Tüm Formatlar**: HEX, RGB, HSL, CMYK ve 10'lu dinamik geçmiş renk paleti.
-- 🖌️ **Dahili MS Paint Rehberi**: Seçtiğiniz rengi Paint'e nasıl aktaracağınızı adım adım anlatan dahili kılavuz.
+- 📖 **Dahili Renk ve Format Rehberi**: Seçtiğiniz rengi tüm çizim ve tasarım yazılımlarına nasıl aktaracağınızı anlatan dahili kılavuz.
 - 🌐 **İki Dil Desteği**: Türkçe ve İngilizce arayüz desteği.
 
 ### ⌨️ Kısayollar ve Kullanım
@@ -71,19 +71,19 @@
 | <kbd>Sol Tık</kbd> veya <kbd>Space</kbd> | Rengi seçer, panoya kopyalar ve ana ekranı açar |
 | <kbd>Esc</kbd> | Renk seçimini iptal eder |
 
-### 🎨 Paint ve Diğer Uygulamalarda Kullanım
+### 🎨 Renk Değerlerinin Tasarım Araçlarında Kullanımı
 
 1. `Alt + P` ile rengi seçin (Otomatik panoya kopyalanır).
-2. MS Paint'i açın -> Üst menüden **Renkleri Düzenle (Edit Colors)** butonuna tıklayın.
-3. Sağ alttaki **Kırmızı (R), Yeşil (G), Mavi (B)** kutularına ETDPicker'da gördüğünüz RGB değerlerini girin.
-4. **Tamam**'a basarak rengi paletinize ekleyin ve hemen çizime başlayın!
+2. Çizim veya grafik tasarım uygulamanızı açıp **Renk Paleti (Color Palette / Edit Colors)** alanına girin.
+3. İlgili **Kırmızı (R), Yeşil (G), Mavi (B)** kutularına ETDPicker'da gördüğünüz RGB değerlerini girin.
+4. Onaylayarak rengi paletinize ekleyin ve hemen kullanın!
 
 ---
 
 <a name="-english"></a>
 ## 🇬🇧 English
 
-**ETDPicker** is an **ultra-lightweight, high-performance** screen color picker built with pure Rust and native Win32 APIs for Windows 10 & 11. It allows you to pick any pixel color on your screen with precision loupe magnification and use it across Photoshop, Figma, MS Paint, and web projects.
+**ETDPicker** is an **ultra-lightweight, high-performance** screen color picker built with pure Rust and native Win32 APIs for Windows 10 & 11. It allows you to pick any pixel color on your screen with precision loupe magnification and use it across graphics, drawing, photo editing, UI design, and web development workflows.
 
 ### 🌟 Key Features
 
@@ -136,11 +136,11 @@ cargo build --release --package etd-installer
 
 ---
 
-## ⚖️ Lisans & Yasal Sorumluluk Reddi (License & Disclaimer)
+## ⚖️ Lisans & Yasal Sorumluluk Reddi (License & Terms of Use)
 
-- **Açık Kaynak Lisansı**: Kaynak kodlar **[MIT Lisansı](LICENSE)** kapsamındadır.
-- **Fikri Mülkiyet**: **ETDPicker** proje ismi, logosu (`logo.jpg`) ve görsel kimliği **Emir Tuğra Dağ**'ın fikri mülkiyetidir.
-- **Sorumluluk Reddi**: Bu yazılım "OLDUĞU GİBİ" (AS IS) sunulmaktadır. Yazılımın kullanımından doğabilecek her türlü durumdan kullanıcı mesuldür; geliştirici hiçbir hukuki veya cezai sorumluluk kabul etmez. Ayrıntılar için **[DISCLAIMER.md](DISCLAIMER.md)** dosyasını inceleyiniz.
+- **Kaynak Kod Lisansı**: Kaynak kodlar **[MIT Lisansı](LICENSE)** kapsamındadır.
+- **Fikri Mülkiyet & Marka**: **ETDPicker** proje ismi, logosu (`logo.jpg`, `app_icon.ico`) ve görsel marka kimliği **Emir Tuğra Dağ**'ın fikri mülkiyetidir ve Tüm Hakları Saklıdır.
+- **Sorumluluk Reddi**: Bu yazılım "OLDUĞU GİBİ" (AS IS) sunulmaktadır. Yazılımın kullanımından doğabilecek her türlü durumdan kullanıcı mesuldür; geliştirici hiçbir hukuki veya cezai sorumluluk kabul etmez. Ayrıntılar için **[LICENSE](LICENSE)** ve **[DISCLAIMER.md](DISCLAIMER.md)** dosyalarını inceleyiniz.
 
 ---
 

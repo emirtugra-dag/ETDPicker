@@ -17,14 +17,14 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 static mut GUIDE_RUNNING: bool = false;
 static mut GUIDE_PARENT: HWND = 0 as _;
 
-pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
+pub fn show_color_guide(parent_hwnd: HWND, lang: Language) {
     let strings = get_strings(lang);
 
     unsafe {
         GUIDE_PARENT = parent_hwnd;
         GUIDE_RUNNING = true;
 
-        let class_name: Vec<u16> = "ETDPaintGuideWindow\0".encode_utf16().collect();
+        let class_name: Vec<u16> = "ETDColorGuideWindow\0".encode_utf16().collect();
         let hinstance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
 
         let wc = WNDCLASSW {
@@ -48,7 +48,7 @@ pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
         let x = (screen_w - width) / 2;
         let y = (screen_h - height) / 2;
 
-        let title_wide: Vec<u16> = strings.paint_guide_title.encode_utf16().chain(std::iter::once(0)).collect();
+        let title_wide: Vec<u16> = strings.color_guide_title.encode_utf16().chain(std::iter::once(0)).collect();
 
         let hwnd = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_DLGMODALFRAME,
@@ -69,7 +69,7 @@ pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
             EnableWindow(parent_hwnd, 0);
         }
 
-        let btn_text: Vec<u16> = strings.paint_guide_close.encode_utf16().chain(std::iter::once(0)).collect();
+        let btn_text: Vec<u16> = strings.color_guide_close.encode_utf16().chain(std::iter::once(0)).collect();
         let btn_class: Vec<u16> = "BUTTON\0".encode_utf16().collect();
         CreateWindowExW(
             0,
@@ -147,7 +147,7 @@ unsafe extern "system" fn guide_wnd_proc(
             let old_font = SelectObject(hdc, font_title as _);
             SetTextColor(hdc, 0x00FFD24C);
 
-            let mut title_wide: Vec<u16> = strings.paint_guide_title.encode_utf16().collect();
+            let mut title_wide: Vec<u16> = strings.color_guide_title.encode_utf16().collect();
             let mut title_rc = RECT { left: 24, top: 18, right: 456, bottom: 48 };
             DrawTextW(hdc, title_wide.as_mut_ptr(), title_wide.len() as _, &mut title_rc, DT_LEFT | DT_NOPREFIX);
 
@@ -161,11 +161,11 @@ unsafe extern "system" fn guide_wnd_proc(
             SetTextColor(hdc, 0x00E0E0E0);
 
             let steps = [
-                strings.paint_guide_step1,
-                strings.paint_guide_step2,
-                strings.paint_guide_step3,
-                strings.paint_guide_step4,
-                strings.paint_guide_step5,
+                strings.color_guide_step1,
+                strings.color_guide_step2,
+                strings.color_guide_step3,
+                strings.color_guide_step4,
+                strings.color_guide_step5,
             ];
 
             let mut y = 62;

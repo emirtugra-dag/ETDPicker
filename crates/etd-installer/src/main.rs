@@ -36,7 +36,7 @@ const ASSET_ICON: &[u8] = include_bytes!("../../../assets/app_icon.ico");
 const ASSET_LICENSE: &[u8] = include_bytes!("../../../LICENSE");
 const ASSET_DISCLAIMER: &[u8] = include_bytes!("../../../DISCLAIMER.md");
 const ASSET_README: &[u8] = include_bytes!("../../../README.md");
-const ASSET_PAINT_GUIDE: &[u8] = include_bytes!("../../../docs/PAINT_GUIDE.md");
+const ASSET_COLOR_GUIDE: &[u8] = include_bytes!("../../../docs/COLOR_GUIDE.md");
 
 // State
 static CURRENT_STEP: AtomicUsize = AtomicUsize::new(1);
@@ -653,7 +653,7 @@ unsafe fn perform_installation(_hwnd: HWND) {
     let target_license = install_dir.join("LICENSE");
     let target_disclaimer = install_dir.join("DISCLAIMER.md");
     let target_readme = install_dir.join("README.md");
-    let target_guide = install_dir.join("PAINT_GUIDE.md");
+    let target_guide = install_dir.join("COLOR_GUIDE.md");
 
     let _ = fs::write(&target_exe, ASSET_PICKER_EXE);
 
@@ -665,7 +665,7 @@ unsafe fn perform_installation(_hwnd: HWND) {
     let _ = fs::write(&target_license, ASSET_LICENSE);
     let _ = fs::write(&target_disclaimer, ASSET_DISCLAIMER);
     let _ = fs::write(&target_readme, ASSET_README);
-    let _ = fs::write(&target_guide, ASSET_PAINT_GUIDE);
+    let _ = fs::write(&target_guide, ASSET_COLOR_GUIDE);
 
     let config_ini = install_dir.join("config.ini");
     if !config_ini.exists() {
