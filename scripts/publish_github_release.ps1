@@ -29,6 +29,7 @@ if (-not $token) {
 
 $repo = "emirtugra-dag/ETDPicker"
 $tag = "v1.0.0"
+
 $headers = @{
     "Authorization" = "token $token"
     "Accept" = "application/vnd.github.v3+json"
@@ -40,7 +41,7 @@ $existingRelease = $null
 try {
     $existingRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/tags/$tag" -Headers $headers -Method Get -ErrorAction Stop
 } catch {
-    # Release doesn't exist yet
+    # Doesn't exist
 }
 
 if ($existingRelease) {
@@ -49,35 +50,35 @@ if ($existingRelease) {
     Start-Sleep -Seconds 1
 }
 
-Write-Host "Creating new GitHub Release for '$tag'..."
-$releaseBody = @"
-# 🎯 ETDPicker v1.0.0
+Write-Host "Reading RELEASE_NOTES.md with UTF-8 encoding..."
+$notesPath = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\docs\RELEASE_NOTES.md"
+if (-not (Test-Path $notesPath)) {
+    $notesPath = ".\docs\RELEASE_NOTES.md"
+}
+$releaseBody = [System.IO.File]::ReadAllText((Resolve-Path $notesPath).Path, [System.Text.Encoding]::UTF8)
 
-Ultra-lightweight, high-performance screen color picker for Windows 10 & 11 built with pure Rust and native Win32.
-
-### 📦 Release Assets
-- **🚀 `ETDPicker_Portable.exe`** - Standalone portable executable. No installation required.
-- **📦 `ETDPicker_Setup.exe`** - Clean installer wizard with startup, desktop, and start menu shortcuts.
-
-### ✨ Highlights
-- **Lightning Fast (<10 MB RAM)**: Minimal memory footprint.
-- **Precision Magnifier**: Press `Alt + P` for live 8x pixel loupe with isolated arrow key navigation.
-- **True Foreground Activation**: Instantly opens in front of all open windows upon picking.
-- **All Color Formats**: Instant HEX, RGB, HSL, CMYK conversion + 10-slot dynamic history.
-- **Multi-Language**: Türkçe (TR) & English (EN) support.
-- **Authenticode Signed**: Digitally signed binaries for security.
-"@
-
-$releasePayload = @{
+Add-Type -AssemblyName System.Web.Extensions
+$serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+$payloadObj = @{
     tag_name = $tag
     target_commitish = "main"
     name = "ETDPicker v1.0.0 - Official Release"
     body = $releaseBody
     draft = $false
     prerelease = $false
-} | ConvertTo-Json
+}
+$json = $serializer.Serialize($payloadObj)
 
-$newRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Headers $headers -Method Post -Body $releasePayload -ContentType "application/json; charset=utf-8"
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$tempPayload = Join-Path ([System.IO.Path]::GetTempPath()) "etd_release_payload.json"
+[System.IO.File]::WriteAllText($tempPayload, $json, $utf8NoBom)
+
+Write-Host "Creating new GitHub Release for '$tag' via curl..."
+$authHeader = "Authorization: token $token"
+$resp = curl.exe -s -X POST -H $authHeader -H "Accept: application/vnd.github.v3+json" -H "Content-Type: application/json; charset=utf-8" "https://api.github.com/repos/$repo/releases" --data-binary "@$tempPayload"
+Remove-Item $tempPayload -Force
+
+$newRelease = $resp | ConvertFrom-Json
 $releaseId = $newRelease.id
 Write-Host "Created release id: $releaseId"
 
