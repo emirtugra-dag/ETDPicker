@@ -14,7 +14,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos,
-    GetSystemMetrics, PeekMessageW, PostQuitMessage, RegisterClassW, SetCursorPos, SetWindowsHookExW,
+    GetSystemMetrics, PeekMessageW, RegisterClassW, SetCursorPos, SetWindowsHookExW,
     SetWindowPos, ShowWindow, UnhookWindowsHookEx, CS_HREDRAW, CS_VREDRAW, HHOOK, KBDLLHOOKSTRUCT, MSG,
     PM_REMOVE, SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOW,
     WH_KEYBOARD_LL, WM_DESTROY, WM_KEYDOWN, WM_SYSKEYDOWN, WNDCLASSW, WS_EX_NOACTIVATE,
@@ -431,10 +431,7 @@ unsafe extern "system" fn magnifier_wnd_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
-        WM_DESTROY => {
-            PostQuitMessage(0);
-            0
-        }
+        WM_DESTROY => 0,
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }

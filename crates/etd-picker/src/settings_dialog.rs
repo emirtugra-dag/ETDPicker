@@ -9,7 +9,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetSystemMetrics, IsDialogMessageW, PostQuitMessage, RegisterClassW, SendMessageW,
+    GetSystemMetrics, IsDialogMessageW, RegisterClassW, SendMessageW,
     ShowWindow, TranslateMessage, BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL,
     CB_SETCURSEL, CS_HREDRAW, CS_VREDRAW, MSG, SM_CXSCREEN, SM_CYSCREEN, SW_SHOW,
     WM_COMMAND, WM_DESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_EX_DLGMODALFRAME,
@@ -414,10 +414,7 @@ unsafe extern "system" fn settings_wnd_proc(
             windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
             0
         }
-        WM_DESTROY => {
-            PostQuitMessage(0);
-            0
-        }
+        WM_DESTROY => 0,
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }

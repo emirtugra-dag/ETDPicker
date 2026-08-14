@@ -304,10 +304,7 @@ unsafe extern "system" fn lang_prompt_wnd_proc(
             windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
             0
         }
-        WM_DESTROY => {
-            PostQuitMessage(0);
-            0
-        }
+        WM_DESTROY => 0,
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
