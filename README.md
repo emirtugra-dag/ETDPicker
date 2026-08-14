@@ -30,12 +30,12 @@
   <table>
     <tr>
       <td align="center"><b>🖥️ Ana Ekran (Main Window)</b></td>
-      <td align="center"><b>🎨 Renk Detayları (Color Swatch)</b></td>
+      <td align="center"><b>🔍 Canlı Büyüteç (Pixel Magnifier)</b></td>
       <td align="center"><b>⚙️ Ayarlar (Settings)</b></td>
     </tr>
     <tr>
       <td><img src="assets/screenshots/main_window.png" width="280" /></td>
-      <td><img src="assets/screenshots/color_details.png" width="280" /></td>
+      <td><img src="assets/screenshots/magnifier.png" width="280" /></td>
       <td><img src="assets/screenshots/settings_window.png" width="280" /></td>
     </tr>
   </table>
