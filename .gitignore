@@ -1,0 +1,10 @@
+/target/
+dist/
+*.pdb
+*.exe
+!dist/*.exe
+*.tmp
+rustup-init.exe
+.idea/
+.vscode/
+*.log
