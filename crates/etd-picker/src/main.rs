@@ -171,9 +171,15 @@ unsafe fn add_tray_icon(hwnd: HWND, icon: windows_sys::Win32::UI::WindowsAndMess
     nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
     nid.hWnd = hwnd;
     nid.uID = 1;
+    Shell_NotifyIconW(NIM_DELETE, &nid);
+
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = icon;
+    nid.hIcon = if icon != 0 as _ {
+        icon
+    } else {
+        LoadIconW(0 as _, windows_sys::Win32::UI::WindowsAndMessaging::IDI_APPLICATION)
+    };
 
     let tip_wide: Vec<u16> = tip.encode_utf16().take(127).chain(std::iter::once(0)).collect();
     for (i, &ch) in tip_wide.iter().enumerate() {
@@ -182,7 +188,11 @@ unsafe fn add_tray_icon(hwnd: HWND, icon: windows_sys::Win32::UI::WindowsAndMess
         }
     }
 
-    Shell_NotifyIconW(NIM_ADD, &nid);
+    let res = Shell_NotifyIconW(NIM_ADD, &nid);
+    if res == 0 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        Shell_NotifyIconW(NIM_ADD, &nid);
+    }
 }
 
 unsafe fn remove_tray_icon(hwnd: HWND) {

@@ -55,6 +55,14 @@ impl AppConfig {
             return local_ini;
         }
 
+        let exe_path_str = exe_dir.to_string_lossy().to_lowercase();
+        let is_in_program_files = exe_path_str.contains("program files") || exe_path_str.contains("programfiles");
+
+        if !is_in_program_files {
+            // Portable mode or user directory: store config.ini right next to executable
+            return local_ini;
+        }
+
         if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
             let app_dir = PathBuf::from(appdata).join("ETDPicker");
             let _ = fs::create_dir_all(&app_dir);

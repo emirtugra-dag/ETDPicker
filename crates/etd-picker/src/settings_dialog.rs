@@ -21,6 +21,13 @@ static mut CHK_TRAY: HWND = 0 as _;
 static mut CMB_LANG: HWND = 0 as _;
 static mut CMB_MOD: HWND = 0 as _;
 static mut CMB_KEY: HWND = 0 as _;
+
+static mut READ_LANG: usize = 0;
+static mut READ_MOD: usize = 0;
+static mut READ_KEY: usize = 0;
+static mut READ_STARTUP: bool = false;
+static mut READ_TRAY: bool = true;
+
 static mut SETTINGS_SAVED: bool = false;
 static mut REQUEST_EXIT: bool = false;
 static mut SETTINGS_RUNNING: bool = false;
@@ -296,11 +303,9 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsR
         }
 
         if SETTINGS_SAVED {
-            let lang_idx = SendMessageW(CMB_LANG, CB_GETCURSEL, 0, 0);
-            cfg.language = if lang_idx == 0 { Language::Turkish } else { Language::English };
+            cfg.language = if READ_LANG == 0 { Language::Turkish } else { Language::English };
 
-            let mod_sel = SendMessageW(CMB_MOD, CB_GETCURSEL, 0, 0);
-            let (mod_val, mod_name) = match mod_sel {
+            let (mod_val, mod_name) = match READ_MOD {
                 0 => (0x0001, "Alt"),
                 1 => (0x0003, "Ctrl + Alt"),
                 2 => (0x0006, "Ctrl + Shift"),
@@ -308,8 +313,7 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsR
                 _ => (0x0001, "Alt"),
             };
 
-            let key_sel = SendMessageW(CMB_KEY, CB_GETCURSEL, 0, 0);
-            let (vk_val, key_name) = match key_sel {
+            let (vk_val, key_name) = match READ_KEY {
                 0 => (0x50, "P"),
                 1 => (0x43, "C"),
                 2 => (0x58, "X"),
@@ -327,11 +331,8 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsR
             cfg.hotkey_vk = vk_val;
             cfg.hotkey_name = format!("{} + {}", mod_name, key_name);
 
-            let startup_checked = SendMessageW(CHK_STARTUP, BM_GETCHECK, 0, 0);
-            cfg.run_on_startup = startup_checked == 1;
-
-            let tray_checked = SendMessageW(CHK_TRAY, BM_GETCHECK, 0, 0);
-            cfg.show_tray_icon = tray_checked == 1;
+            cfg.run_on_startup = READ_STARTUP;
+            cfg.show_tray_icon = READ_TRAY;
 
             cfg.apply_startup_registry();
             cfg.save();
@@ -352,6 +353,22 @@ unsafe extern "system" fn settings_wnd_proc(
         WM_COMMAND => {
             let id = (wparam & 0xFFFF) as i32;
             if id == 2008 {
+                // Read control state BEFORE destroying child windows!
+                let lang_sel = SendMessageW(CMB_LANG, CB_GETCURSEL, 0, 0);
+                READ_LANG = if lang_sel == 1 { 1 } else { 0 };
+
+                let mod_sel = SendMessageW(CMB_MOD, CB_GETCURSEL, 0, 0);
+                READ_MOD = if mod_sel >= 0 && mod_sel < 4 { mod_sel as usize } else { 0 };
+
+                let key_sel = SendMessageW(CMB_KEY, CB_GETCURSEL, 0, 0);
+                READ_KEY = if key_sel >= 0 && key_sel < 10 { key_sel as usize } else { 0 };
+
+                let startup_checked = SendMessageW(CHK_STARTUP, BM_GETCHECK, 0, 0);
+                READ_STARTUP = startup_checked == 1;
+
+                let tray_checked = SendMessageW(CHK_TRAY, BM_GETCHECK, 0, 0);
+                READ_TRAY = tray_checked == 1;
+
                 SETTINGS_SAVED = true;
                 SETTINGS_RUNNING = false;
                 if SETTINGS_PARENT != 0 as _ {
