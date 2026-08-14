@@ -30,8 +30,8 @@
   <table>
     <tr>
       <td align="center"><b>🖥️ Ana Ekran (Main Window)</b></td>
-      <td align="center"><b>🔍 Canlı Büyüteç (Pixel Magnifier)</b></td>
-      <td align="center"><b>⚙️ Ayarlar (Settings)</b></td>
+      <td align="center"><b>⚙️ Ayarlar (Settings))</b></td>
+      <td align="center"><b>🔍 Canlı Büyüteç (Pixel Magnifier</b></td>
     </tr>
     <tr>
       <td><img src="assets/screenshots/main_window.png" width="280" /></td>
