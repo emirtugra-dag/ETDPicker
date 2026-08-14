@@ -31,7 +31,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // Embedded full assets
-const ASSET_PICKER_EXE: &[u8] = include_bytes!("../../../dist/ETDPicker.exe");
+const ASSET_PICKER_EXE: &[u8] = include_bytes!("../../../target/release/etd-picker.exe");
 const ASSET_ICON: &[u8] = include_bytes!("../../../assets/app_icon.ico");
 const ASSET_LICENSE: &[u8] = include_bytes!("../../../LICENSE");
 const ASSET_DISCLAIMER: &[u8] = include_bytes!("../../../DISCLAIMER.md");
