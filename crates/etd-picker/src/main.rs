@@ -347,6 +347,9 @@ unsafe extern "system" fn main_wnd_proc(
                         state.config.language
                     };
                     paint_guide::show_paint_guide(hwnd, lang);
+                    ShowWindow(hwnd, SW_SHOW);
+                    SetForegroundWindow(hwnd);
+                    windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                 }
                 9004 => {
                     let mut cfg_copy = {
@@ -374,13 +377,16 @@ unsafe extern "system" fn main_wnd_proc(
                                 }
                                 state.config = cfg_copy;
                             }
-                            windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                         }
                         SettingsResult::ExitApplication => {
                             DestroyWindow(hwnd);
+                            return 0;
                         }
                         SettingsResult::Cancelled => {}
                     }
+                    ShowWindow(hwnd, SW_SHOW);
+                    SetForegroundWindow(hwnd);
+                    windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                 }
                 9005 => {
                     DestroyWindow(hwnd);
@@ -453,6 +459,9 @@ unsafe extern "system" fn main_wnd_proc(
                                 state.config.language
                             };
                             paint_guide::show_paint_guide(hwnd, lang);
+                            ShowWindow(hwnd, SW_SHOW);
+                            SetForegroundWindow(hwnd);
+                            windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                         }
                         103 => {
                             let mut cfg_copy = {
@@ -480,13 +489,16 @@ unsafe extern "system" fn main_wnd_proc(
                                         }
                                         state.config = cfg_copy;
                                     }
-                                    windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                                 }
                                 SettingsResult::ExitApplication => {
                                     DestroyWindow(hwnd);
+                                    return 0;
                                 }
                                 SettingsResult::Cancelled => {}
                             }
+                            ShowWindow(hwnd, SW_SHOW);
+                            SetForegroundWindow(hwnd);
+                            windows_sys::Win32::Graphics::Gdi::InvalidateRect(hwnd, std::ptr::null(), 0);
                         }
                         201 => {
                             let hex = {

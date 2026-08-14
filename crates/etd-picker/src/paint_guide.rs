@@ -8,16 +8,22 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetSystemMetrics, IsDialogMessageW, RegisterClassW, ShowWindow,
+    GetSystemMetrics, IsDialogMessageW, RegisterClassW, SetForegroundWindow, ShowWindow,
     TranslateMessage, CS_HREDRAW, CS_VREDRAW, MSG, SM_CXSCREEN, SM_CYSCREEN, SW_SHOW,
     WM_COMMAND, WM_DESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_EX_DLGMODALFRAME,
     WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
 };
 
+static mut GUIDE_RUNNING: bool = false;
+static mut GUIDE_PARENT: HWND = 0 as _;
+
 pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
     let strings = get_strings(lang);
 
     unsafe {
+        GUIDE_PARENT = parent_hwnd;
+        GUIDE_RUNNING = true;
+
         let class_name: Vec<u16> = "ETDPaintGuideWindow\0".encode_utf16().collect();
         let hinstance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
 
@@ -69,7 +75,7 @@ pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
             0,
             btn_class.as_ptr(),
             btn_text.as_ptr(),
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000001, // BS_DEFPUSHBUTTON
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | 0x00000001,
             (width - 160) / 2,
             height - 54,
             160,
@@ -83,19 +89,16 @@ pub fn show_paint_guide(parent_hwnd: HWND, lang: Language) {
         ShowWindow(hwnd, SW_SHOW);
 
         let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
+        while GUIDE_RUNNING && GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
             if IsDialogMessageW(hwnd, &msg) == 0 {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
-            }
-            if windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(hwnd) == 0 {
-                break;
             }
         }
 
         if parent_hwnd != 0 as _ {
             EnableWindow(parent_hwnd, 1);
-            windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(parent_hwnd);
+            SetForegroundWindow(parent_hwnd);
         }
     }
 }
@@ -110,6 +113,11 @@ unsafe extern "system" fn guide_wnd_proc(
         WM_COMMAND => {
             let id = (wparam & 0xFFFF) as i32;
             if id == 1001 || id == 2 {
+                GUIDE_RUNNING = false;
+                if GUIDE_PARENT != 0 as _ {
+                    EnableWindow(GUIDE_PARENT, 1);
+                    SetForegroundWindow(GUIDE_PARENT);
+                }
                 DestroyWindow(hwnd);
             }
             0
@@ -171,10 +179,13 @@ unsafe extern "system" fn guide_wnd_proc(
             SelectObject(hdc, old_font);
             DeleteObject(font_body as _);
 
-            windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &mut ps);
+            windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
             0
         }
-        WM_DESTROY => 0,
+        WM_DESTROY => {
+            GUIDE_RUNNING = false;
+            0
+        }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }

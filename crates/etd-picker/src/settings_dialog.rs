@@ -9,7 +9,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetSystemMetrics, IsDialogMessageW, RegisterClassW, SendMessageW,
+    GetSystemMetrics, IsDialogMessageW, RegisterClassW, SendMessageW, SetForegroundWindow,
     ShowWindow, TranslateMessage, BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL,
     CB_SETCURSEL, CS_HREDRAW, CS_VREDRAW, MSG, SM_CXSCREEN, SM_CYSCREEN, SW_SHOW,
     WM_COMMAND, WM_DESTROY, WM_PAINT, WNDCLASSW, WS_CHILD, WS_EX_DLGMODALFRAME,
@@ -23,6 +23,8 @@ static mut CMB_MOD: HWND = 0 as _;
 static mut CMB_KEY: HWND = 0 as _;
 static mut SETTINGS_SAVED: bool = false;
 static mut REQUEST_EXIT: bool = false;
+static mut SETTINGS_RUNNING: bool = false;
+static mut SETTINGS_PARENT: HWND = 0 as _;
 
 pub enum SettingsResult {
     Saved,
@@ -34,6 +36,9 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsR
     unsafe {
         SETTINGS_SAVED = false;
         REQUEST_EXIT = false;
+        SETTINGS_PARENT = parent_hwnd;
+        SETTINGS_RUNNING = true;
+
         let strings = get_strings(cfg.language);
 
         let class_name: Vec<u16> = "ETDSettingsWindow\0".encode_utf16().collect();
@@ -272,19 +277,16 @@ pub fn show_settings_dialog(parent_hwnd: HWND, cfg: &mut AppConfig) -> SettingsR
         ShowWindow(hwnd, SW_SHOW);
 
         let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
+        while SETTINGS_RUNNING && GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
             if IsDialogMessageW(hwnd, &msg) == 0 {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
-            }
-            if windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(hwnd) == 0 {
-                break;
             }
         }
 
         if parent_hwnd != 0 as _ {
             EnableWindow(parent_hwnd, 1);
-            windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(parent_hwnd);
+            SetForegroundWindow(parent_hwnd);
         }
 
         DeleteObject(font_ui as _);
@@ -351,13 +353,27 @@ unsafe extern "system" fn settings_wnd_proc(
             let id = (wparam & 0xFFFF) as i32;
             if id == 2008 {
                 SETTINGS_SAVED = true;
+                SETTINGS_RUNNING = false;
+                if SETTINGS_PARENT != 0 as _ {
+                    EnableWindow(SETTINGS_PARENT, 1);
+                    SetForegroundWindow(SETTINGS_PARENT);
+                }
                 DestroyWindow(hwnd);
             } else if id == 2007 {
                 // Exit app
                 REQUEST_EXIT = true;
+                SETTINGS_RUNNING = false;
+                if SETTINGS_PARENT != 0 as _ {
+                    EnableWindow(SETTINGS_PARENT, 1);
+                }
                 DestroyWindow(hwnd);
             } else if id == 2009 || id == 2 {
                 SETTINGS_SAVED = false;
+                SETTINGS_RUNNING = false;
+                if SETTINGS_PARENT != 0 as _ {
+                    EnableWindow(SETTINGS_PARENT, 1);
+                    SetForegroundWindow(SETTINGS_PARENT);
+                }
                 DestroyWindow(hwnd);
             }
             0
@@ -414,7 +430,10 @@ unsafe extern "system" fn settings_wnd_proc(
             windows_sys::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
             0
         }
-        WM_DESTROY => 0,
+        WM_DESTROY => {
+            SETTINGS_RUNNING = false;
+            0
+        }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
