@@ -22,22 +22,33 @@ use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
 };
 use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
+use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    RegisterHotKey, SetActiveWindow, UnregisterHotKey,
+};
 use windows_sys::Win32::UI::Shell::{
     Shell_NotifyIconW, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW, NIF_ICON, NIF_MESSAGE,
     NIF_TIP,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
-    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics, LoadCursorW,
-    LoadIconW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetWindowTextW, ShowWindow,
-    TrackPopupMenu, TranslateMessage, CS_HREDRAW, CS_VREDRAW, IDC_ARROW, MF_SEPARATOR,
-    MF_STRING, MSG, SC_CLOSE, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE, SW_SHOW,
+    AppendMenuW, BringWindowToTop, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
+    DestroyWindow, DispatchMessageW, GetCursorPos, GetForegroundWindow, GetMessageW,
+    GetSystemMetrics, GetWindowThreadProcessId, LoadCursorW, LoadIconW,
+    PostQuitMessage, RegisterClassW, SetForegroundWindow, SetWindowPos, SetWindowTextW,
+    ShowWindow, TrackPopupMenu, TranslateMessage, CS_HREDRAW, CS_VREDRAW, IDC_ARROW,
+    MF_SEPARATOR, MF_STRING, MSG, SC_CLOSE, SM_CXSCREEN, SM_CYSCREEN,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW,
     TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_CLOSE, WM_COMMAND, WM_DESTROY,
     WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_PAINT, WM_RBUTTONUP, WM_SYSCOMMAND,
     WM_TIMER, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED,
     WS_SYSMENU, WS_VISIBLE,
 };
+
+#[link(name = "user32")]
+extern "system" {
+    fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
+    fn AllowSetForegroundWindow(dw_process_id: u32) -> i32;
+}
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 const HOTKEY_ID: i32 = 100;
@@ -234,6 +245,52 @@ unsafe fn copy_to_clipboard(hwnd: HWND, text: &str) {
     }
 }
 
+pub unsafe fn force_foreground_window(hwnd: HWND) {
+    if hwnd == 0 as _ {
+        return;
+    }
+
+    AllowSetForegroundWindow(0xFFFFFFFF);
+
+    let foreground_hwnd = GetForegroundWindow();
+    let current_thread_id = GetCurrentThreadId();
+    let mut fg_process_id = 0;
+    let foreground_thread_id = if foreground_hwnd != 0 as _ {
+        GetWindowThreadProcessId(foreground_hwnd, &mut fg_process_id)
+    } else {
+        0
+    };
+
+    if foreground_thread_id != 0 && foreground_thread_id != current_thread_id {
+        AttachThreadInput(foreground_thread_id, current_thread_id, 1);
+    }
+
+    ShowWindow(hwnd, SW_RESTORE);
+    ShowWindow(hwnd, SW_SHOW);
+    BringWindowToTop(hwnd);
+
+    // Force Z-order placement to front
+    SetWindowPos(
+        hwnd,
+        -1 as isize as HWND, // HWND_TOPMOST
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+    );
+    SetWindowPos(
+        hwnd,
+        -2 as isize as HWND, // HWND_NOTOPMOST
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+    );
+
+    SetForegroundWindow(hwnd);
+    SetActiveWindow(hwnd);
+
+    if foreground_thread_id != 0 && foreground_thread_id != current_thread_id {
+        AttachThreadInput(foreground_thread_id, current_thread_id, 0);
+    }
+}
+
 unsafe fn trigger_pick_color(hwnd: HWND) {
     let lang = {
         let state = APP_STATE.lock().unwrap();
@@ -243,10 +300,8 @@ unsafe fn trigger_pick_color(hwnd: HWND) {
     ShowWindow(hwnd, SW_HIDE);
     let res = magnifier::pick_color_interactive(lang);
 
-    // After picking, ALWAYS restore and show the main window to show the selected color!
-    ShowWindow(hwnd, SW_RESTORE);
-    ShowWindow(hwnd, SW_SHOW);
-    SetForegroundWindow(hwnd);
+    // After picking, FORCE the main window to the true foreground in front of all apps!
+    force_foreground_window(hwnd);
 
     if res.selected {
         {
@@ -307,10 +362,8 @@ unsafe extern "system" fn main_wnd_proc(
         }
         WM_TRAYICON => {
             let event = (lparam & 0xFFFF) as u32;
-            if event == WM_LBUTTONUP {
-                ShowWindow(hwnd, SW_RESTORE);
-                ShowWindow(hwnd, SW_SHOW);
-                SetForegroundWindow(hwnd);
+            if event == WM_LBUTTONUP || event == 0x0203 {
+                force_foreground_window(hwnd);
             } else if event == WM_RBUTTONUP {
                 let mut pt = POINT { x: 0, y: 0 };
                 GetCursorPos(&mut pt);
@@ -347,9 +400,7 @@ unsafe extern "system" fn main_wnd_proc(
             match cmd_id {
                 9001 => trigger_pick_color(hwnd),
                 9002 => {
-                    ShowWindow(hwnd, SW_RESTORE);
-                    ShowWindow(hwnd, SW_SHOW);
-                    SetForegroundWindow(hwnd);
+                    force_foreground_window(hwnd);
                 }
                 9003 => {
                     let lang = {
